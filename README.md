@@ -32,7 +32,7 @@ A Python-based face recognition attendance system that automatically tracks stud
 
 2. **Install required packages:**
    ```bash
-   pip install opencv-python numpy face-recognition pyttsx3
+   pip install -r requirements.txt
    ```
 
 3. **Grant camera permissions** (macOS):
@@ -78,7 +78,10 @@ Facial-Recognition/
 ├── main.py                 # Main face recognition program
 ├── attendance.py           # Database management and CLI tools
 ├── faces/                  # Folder containing known face images
-│   └── aswin.jpg          # Example face image
+│   ├── aswin.jpg          # Example face image
+│   └── Edwin.png          # Another example face image
+├── requirements.txt        # Python dependencies
+├── .gitignore             # Git ignore file
 ├── attendance.db           # SQLite database with student/attendance data
 ├── attendance_report_*.csv # Generated attendance reports
 └── README.md              # This file
