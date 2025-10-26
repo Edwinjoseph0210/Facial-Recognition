@@ -157,7 +157,7 @@ This project is open source and available under the [MIT License](LICENSE).
 - GitHub: [@Edwinjoseph0210](https://github.com/Edwinjoseph0210)
 **Aswin MS**
 - GitHub: [@aswinms926](https://github.com/aswinms926)
-**Edwin Joseph**
+**Tom Sibu**
 - GitHub: [@TomSibu](https://github.com/TomSibu)
 
 ## 🙏 Acknowledgments
