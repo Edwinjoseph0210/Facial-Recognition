@@ -773,6 +773,97 @@ def export_today_csv(output_dir: str = None, date: str = None, session_time: str
         return None
 
 
+def export_today_html(output_dir: str = None, date: str = None, session_time: str = None, db_path=DB_NAME):
+    """Export attendance for the specified date to an HTML file with a styled table.
+
+    File name: attendance_report_<date>.html
+    Columns: ID | Roll | Name | Time | Date | Status
+    """
+    try:
+        if date is None:
+            date = datetime.now().strftime('%Y-%m-%d')
+        if output_dir is None:
+            output_dir = os.path.dirname(db_path)
+        os.makedirs(output_dir, exist_ok=True)
+
+        out_path = os.path.join(output_dir, f'attendance_report_{date}.html')
+
+        conn = sqlite3.connect(db_path)
+        cur = conn.cursor()
+        cur.execute('''
+            SELECT s.id, s.roll_number, s.name,
+                (SELECT time FROM attendance a WHERE a.student_id = s.id AND a.date = ? ORDER BY a.id DESC LIMIT 1) AS atime,
+                (SELECT date FROM attendance a WHERE a.student_id = s.id AND a.date = ? ORDER BY a.id DESC LIMIT 1) AS adate,
+                (SELECT status FROM attendance a WHERE a.student_id = s.id AND a.date = ? ORDER BY a.id DESC LIMIT 1) AS astatus
+            FROM students s
+            ORDER BY s.id
+        ''', (date, date, date))
+        rows = cur.fetchall()
+        conn.close()
+
+        # Build HTML
+        style = (
+            """
+            <style>
+            :root { --bg:#0b1324; --card:#111a31; --text:#e6edf3; --muted:#9fb0c3; --ok:#2ea043; --warn:#d29922; --bad:#f85149; }
+            body{background:var(--bg);color:var(--text);font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,'Noto Sans',sans-serif;margin:24px}
+            .card{background:var(--card);border-radius:12px;box-shadow:0 10px 25px rgba(0,0,0,.25);padding:18px}
+            h1{font-size:20px;margin:0 0 12px}
+            .meta{color:var(--muted);font-size:12px;margin-bottom:12px}
+            table{width:100%;border-collapse:collapse;overflow:hidden;border-radius:8px}
+            thead th{background:#172243;color:var(--muted);font-weight:600;text-align:left;font-size:12px;letter-spacing:.02em;padding:10px 12px;border-bottom:1px solid #213056}
+            tbody td{padding:10px 12px;border-bottom:1px solid #1b274a}
+            tbody tr:hover{background:#151f3b}
+            .status{font-weight:700;padding:2px 8px;border-radius:999px;font-size:11px;display:inline-block}
+            .Present{background:rgba(46,160,67,.15);color:var(--ok);border:1px solid rgba(46,160,67,.35)}
+            .Partial{background:rgba(210,153,34,.15);color:var(--warn);border:1px solid rgba(210,153,34,.35)}
+            .Absent{background:rgba(248,81,73,.15);color:var(--bad);border:1px solid rgba(248,81,73,.35)}
+            .badge{padding:2px 8px;border:1px solid #2a3a66;border-radius:999px;color:var(--muted);font-size:11px}
+            </style>
+            """
+        )
+
+        header = f"<h1>Attendance Report</h1><div class=meta>Date: <span class=badge>{date}</span></div>"
+
+        def status_badge(s):
+            s = s or 'Absent'
+            cls = 'Present' if s == 'Present' else ('Partial' if s == 'Partial' else 'Absent')
+            return f"<span class='status {cls}'>{s}</span>"
+
+        # Count summary
+        present = sum(1 for _, _, _, _, _, st in rows if (st or 'Absent') == 'Present')
+        partial = sum(1 for _, _, _, _, _, st in rows if (st or 'Absent') == 'Partial')
+        absent = sum(1 for _, _, _, _, _, st in rows if (st or 'Absent') == 'Absent')
+        summary = f"<div class=meta>Present: <span class=badge>{present}</span> · Partial: <span class=badge>{partial}</span> · Absent: <span class=badge>{absent}</span></div>"
+
+        rows_html = []
+        for sid, roll, name, atime, adate, status in rows:
+            atime = atime or (session_time if session_time is not None else '')
+            adate = adate or date
+            status_html = status_badge(status)
+            rows_html.append(
+                f"<tr><td>{sid}</td><td>{roll or ''}</td><td>{name or ''}</td><td>{atime}</td><td>{adate}</td><td>{status_html}</td></tr>"
+            )
+
+        table = (
+            "<table><thead><tr>"
+            "<th>ID</th><th>Roll</th><th>Name</th><th>Time</th><th>Date</th><th>Status</th>"
+            "</tr></thead><tbody>" + "".join(rows_html) + "</tbody></table>"
+        )
+
+        html = f"<!doctype html><html><meta charset=utf-8><title>Attendance {date}</title>{style}<body><div class=card>{header}{summary}{table}</div></body></html>"
+
+        with open(out_path, 'w', encoding='utf-8') as f:
+            f.write(html)
+
+        print(f"export_today_html: Exported attendance for {date} to {out_path}")
+        return out_path
+    except Exception as e:
+        print(f"export_today_html: Failed to export attendance for {date}: {e}")
+        traceback.print_exc()
+        return None
+
+
 def create_session(start_time: str = None, date: str = None, db_path=DB_NAME):
     """Create a new session row and return session_id."""
     try:
