@@ -79,7 +79,8 @@ Facial-Recognition/
 ├── attendance.py           # Database management and CLI tools
 ├── faces/                  # Folder containing known face images
 │   ├── aswin.jpg          # Example face image
-│   └── Edwin.png          # Another example face image
+│   ├── Edwin.png          # Another example face image
+│   └── Tom.jpg            # Another example face image
 ├── requirements.txt        # Python dependencies
 ├── .gitignore             # Git ignore file
 ├── attendance.db           # SQLite database with student/attendance data
@@ -150,10 +151,14 @@ sudo apt install cmake  # Ubuntu/Debian
 
 This project is open source and available under the [MIT License](LICENSE).
 
-## 👨‍💻 Author
+## 👨‍💻 Authors
 
 **Edwin Joseph**
 - GitHub: [@Edwinjoseph0210](https://github.com/Edwinjoseph0210)
+**Aswin MS**
+- GitHub: [@aswinms926](https://github.com/aswinms926)
+**Edwin Joseph**
+- GitHub: [@TomSibu](https://github.com/TomSibu)
 
 ## 🙏 Acknowledgments
 
