@@ -5,7 +5,7 @@ import { useAuth } from '../contexts/AuthContext';
 const Auth = () => {
   const [isLogin, setIsLogin] = useState(true);
   const [formData, setFormData] = useState({
-    username: '',
+    email: '',
     password: '',
     confirm_password: ''
   });
@@ -22,7 +22,7 @@ const Auth = () => {
     try {
       let result;
       if (isLogin) {
-        result = await login({ username: formData.username, password: formData.password });
+        result = await login({ email: formData.email, password: formData.password });
       } else {
         result = await register(formData);
       }
@@ -49,7 +49,7 @@ const Auth = () => {
   const toggleMode = () => {
     setIsLogin(!isLogin);
     setError('');
-    setFormData({ username: '', password: '', confirm_password: '' });
+    setFormData({ email: '', password: '', confirm_password: '' });
   };
 
   return (
@@ -71,15 +71,15 @@ const Auth = () => {
         
         <form onSubmit={handleSubmit} className="login-form">
           <div className="mb-3">
-            <label htmlFor="username" className="form-label">
-              <i className="fas fa-user me-2"></i>Username
+            <label htmlFor="email" className="form-label">
+              <i className="fas fa-envelope me-2"></i>Email
             </label>
             <input 
-              type="text" 
+              type="email" 
               className="form-control" 
-              id="username" 
-              name="username"
-              value={formData.username}
+              id="email" 
+              name="email"
+              value={formData.email}
               onChange={handleChange}
               required 
             />
@@ -150,7 +150,7 @@ const Auth = () => {
           {isLogin && (
             <div className="mt-3">
               <small className="text-muted">
-                Default credentials: admin / admin123
+                Demo account: demo@example.com / demo123456
               </small>
             </div>
           )}
