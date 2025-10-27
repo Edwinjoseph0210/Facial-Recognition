@@ -52,3 +52,13 @@ attendance_report_*.csv
 
 # Test files
 test_camera.py
+
+# Node modules
+node_modules/
+
+# Logs
+*.log
+
+# Frontend build
+frontend/node_modules/
+frontend/build/
