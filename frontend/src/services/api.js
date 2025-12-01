@@ -56,6 +56,12 @@ export const studentsAPI = {
 export const attendanceAPI = {
   getAttendance: () => api.get('/attendance'),
   markAttendance: (name) => api.post('/mark_attendance', { name }),
+  markMultipleAttendance: (names) => api.post('/mark_multiple_attendance', { names }),
+};
+
+export const faceRecognitionAPI = {
+  recognizeFaces: (imageData) => api.post('/recognize_faces', { image: imageData }),
+  getCameras: () => api.get('/cameras'),
 };
 
 export const reportsAPI = {

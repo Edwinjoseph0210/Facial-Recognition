@@ -12,10 +12,82 @@ import face_recognition
 import math
 from functools import wraps
 import attendance
+from PIL import Image
+import io
 
 app = Flask(__name__)
 app.secret_key = 'your-secret-key-change-this-in-production'
 CORS(app, supports_credentials=True)
+
+# Global variables for face recognition
+known_face_encodings = []
+known_face_names = []
+
+def face_confidence(face_distance, face_match_threshold=0.6):
+    """Calculate confidence percentage from face distance"""
+    range_val = (1.0 - face_match_threshold)
+    linear_val = (1.0 - face_distance) / (range_val * 2.0)
+
+    if face_distance > face_match_threshold:
+        return str(round(linear_val * 100, 2)) + '%'
+    else:
+        value = (linear_val + ((1.0 - linear_val) * math.pow((linear_val - 0.5) * 2, 0.2))) * 100
+        return str(round(value, 2)) + '%'
+
+def load_known_faces():
+    """Load all known face encodings from the faces directory"""
+    global known_face_encodings, known_face_names
+    known_face_encodings = []
+    known_face_names = []
+    
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    faces_path = os.path.join(script_dir, "faces")
+    
+    if not os.path.exists(faces_path):
+        print(f"Faces directory not found at {faces_path}")
+        return
+    
+    for image in os.listdir(faces_path):
+        if image.lower().endswith(('.png', '.jpg', '.jpeg', '.gif')):
+            face_image = face_recognition.load_image_file(os.path.join(faces_path, image))
+            encodings = face_recognition.face_encodings(face_image)
+            if encodings:
+                known_face_encodings.append(encodings[0])
+                known_face_names.append(os.path.splitext(image)[0])
+    
+    print(f"Loaded {len(known_face_names)} known faces: {known_face_names}")
+
+def get_available_cameras():
+    """Get list of available camera indices with device information"""
+    available = []
+    for index in range(10):  # Check up to 10 cameras
+        cap = cv2.VideoCapture(index)
+        if cap.isOpened():
+            # Try to get camera name/backend info
+            camera_name = f"Camera {index}"
+            try:
+                # Try to get backend name (works on some systems)
+                backend = cap.getBackendName()
+                # Try to get camera properties
+                width = cap.get(cv2.CAP_PROP_FRAME_WIDTH)
+                height = cap.get(cv2.CAP_PROP_FRAME_HEIGHT)
+                
+                # Detect Logitech Brio (4K capable, typically 1920x1080 or higher)
+                if width >= 1920 or height >= 1080:
+                    camera_name = f"Logitech Brio (Camera {index})"
+                elif backend:
+                    camera_name = f"{backend} Camera {index}"
+            except:
+                pass
+            
+            available.append({
+                'index': index,
+                'name': camera_name,
+                'width': int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)) if cap.isOpened() else 0,
+                'height': int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)) if cap.isOpened() else 0
+            })
+            cap.release()
+    return available
 
 # Database initialization
 def init_auth_db():
@@ -262,6 +334,135 @@ def mark_attendance():
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)})
 
+@app.route('/api/cameras', methods=['GET'])
+@login_required
+def list_cameras():
+    """List all available cameras with device information"""
+    try:
+        cameras = get_available_cameras()
+        return jsonify({
+            'success': True,
+            'cameras': cameras,
+            'count': len(cameras)
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+@app.route('/api/recognize_faces', methods=['POST'])
+@login_required
+def recognize_faces():
+    """Recognize multiple faces (up to 15) from an image"""
+    try:
+        data = request.get_json()
+        
+        # Get image data (base64 encoded)
+        image_data = data.get('image')
+        if not image_data:
+            return jsonify({'success': False, 'message': 'No image data provided'}), 400
+        
+        # Remove data URL prefix if present
+        if ',' in image_data:
+            image_data = image_data.split(',')[1]
+        
+        # Decode base64 image
+        image_bytes = base64.b64decode(image_data)
+        image = Image.open(io.BytesIO(image_bytes))
+        
+        # Convert PIL image to numpy array
+        image_array = np.array(image)
+        
+        # Convert RGB to BGR for OpenCV (if needed)
+        if len(image_array.shape) == 3 and image_array.shape[2] == 3:
+            rgb_image = cv2.cvtColor(image_array, cv2.COLOR_RGB2BGR)
+        else:
+            rgb_image = image_array
+        
+        # Convert BGR to RGB for face_recognition
+        rgb_image = cv2.cvtColor(rgb_image, cv2.COLOR_BGR2RGB)
+        
+        # Resize for faster processing (maintain aspect ratio)
+        height, width = rgb_image.shape[:2]
+        if width > 1280:
+            scale = 1280 / width
+            new_width = 1280
+            new_height = int(height * scale)
+            rgb_image = cv2.resize(rgb_image, (new_width, new_height))
+        
+        # Find face locations and encodings
+        # Use HOG model for faster processing (optimized for 15 faces)
+        # HOG is faster than CNN and sufficient for real-time multi-face detection
+        face_locations = face_recognition.face_locations(rgb_image, model='hog', number_of_times_to_upsample=1)
+        face_encodings = face_recognition.face_encodings(rgb_image, face_locations, num_jitters=1)
+        
+        # Limit to 15 faces (prioritize first 15 detected)
+        if len(face_locations) > 15:
+            face_locations = face_locations[:15]
+            face_encodings = face_encodings[:15]
+        
+        recognized_faces = []
+        
+        for face_encoding, face_location in zip(face_encodings, face_locations):
+            # Compare with known faces
+            matches = face_recognition.compare_faces(known_face_encodings, face_encoding)
+            name = "Unknown"
+            confidence = "0%"
+            
+            if known_face_encodings:
+                face_distances = face_recognition.face_distance(known_face_encodings, face_encoding)
+                best_match_index = np.argmin(face_distances)
+                
+                if matches[best_match_index]:
+                    name = known_face_names[best_match_index]
+                    confidence = face_confidence(face_distances[best_match_index])
+            
+            # Convert face_location from (top, right, bottom, left) to (x, y, width, height)
+            top, right, bottom, left = face_location
+            recognized_faces.append({
+                'name': name,
+                'confidence': confidence,
+                'location': {
+                    'x': int(left),
+                    'y': int(top),
+                    'width': int(right - left),
+                    'height': int(bottom - top)
+                }
+            })
+        
+        return jsonify({
+            'success': True,
+            'faces': recognized_faces,
+            'count': len(recognized_faces)
+        })
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+@app.route('/api/mark_multiple_attendance', methods=['POST'])
+@login_required
+def mark_multiple_attendance():
+    """Mark attendance for multiple recognized faces"""
+    try:
+        data = request.get_json()
+        names = data.get('names', [])
+        
+        if not names:
+            return jsonify({'success': False, 'message': 'No names provided'}), 400
+        
+        results = []
+        for name in names:
+            if name and name != "Unknown":
+                result = attendance.mark_attendance(name)
+                results.append({'name': name, 'success': result})
+        
+        return jsonify({
+            'success': True,
+            'results': results,
+            'message': f'Processed {len(results)} attendance records'
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
 @app.route('/api/mark_attendance_batch', methods=['POST'])
 @login_required
 def mark_attendance_batch():
@@ -336,5 +537,8 @@ if __name__ == '__main__':
     # Initialize databases
     init_auth_db()
     attendance.init_db()
+    
+    # Load known faces
+    load_known_faces()
     
     app.run(debug=True, host='0.0.0.0', port=5001)
